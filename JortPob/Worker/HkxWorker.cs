@@ -2,70 +2,86 @@
 using JortPob.Model;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace JortPob.Worker
 {
     public class HkxWorker : Worker
     {
-        private List<CollisionInfo> collisions;
-
-        private int start;
-        private int end;
+        private readonly List<CollisionInfo> _collisions;
+        private readonly int _start;
+        private readonly int _end;
 
         public HkxWorker(List<CollisionInfo> collisions, int start, int end)
         {
-            this.collisions = collisions;
+            _collisions = collisions;
+            _start = start;
+            _end = end;
 
-            this.start = start;
-            this.end = end;
-
-            _thread = new Thread(Run);
+            // Wrap async Run in sync delegate to match Thread type expected by Worker
+            _thread = new Thread(() => Run().GetAwaiter().GetResult());
             _thread.Start();
         }
 
-        private void Run()
+        private async Task Run()
         {
             ExitCode = 1;
 
-            for (int i = start; i < Math.Min(collisions.Count, end); i++)
+            try
             {
-                CollisionInfo collisionInfo = collisions[i];
-                ModelConverter.OBJtoHKX($"{Const.CACHE_PATH}{collisionInfo.obj}", $"{Const.CACHE_PATH}{collisionInfo.hkx}");
-
-                Lort.TaskIterate(); // Progress bar update
-            }
-
-            IsDone = true;
-            ExitCode = 0;
-        }
-
-        public static void Go(List<CollisionInfo> collisions)
-        {
-            Lort.Log($"Converting {collisions.Count} collision...", Lort.Type.Main);                 // Egregiously slow, multithreaded to make less terrible
-            int partition = (int)Math.Ceiling(collisions.Count / (float)Const.THREAD_COUNT);
-            Lort.NewTask("Converting HKX", collisions.Count);
-            List<HkxWorker> workers = new();
-            for (int i = 0; i < Const.THREAD_COUNT; i++)
-            {
-                int start = i * partition;
-                int end = start + partition;
-                HkxWorker worker = new(collisions, start, end);
-                workers.Add(worker);
-            }
-
-            /* Wait for threads to finish */
-            while (true)
-            {
-                bool done = true;
-                foreach (HkxWorker worker in workers)
+                int sliceStart = Math.Max(0, _start);
+                int sliceEnd = Math.Min(_collisions.Count, _end);
+                if (sliceStart >= sliceEnd)
                 {
-                    done &= worker.IsDone;
+                    IsDone = true;
+                    ExitCode = 0;
+                    return;
                 }
 
-                if (done)
-                    break;
+                // Defer materialization and filter invalid files
+                var items = _collisions
+                    .Skip(sliceStart)
+                    .Take(sliceEnd - sliceStart)
+                    .Select(ci => (objPath: $"{Const.CACHE_PATH}{ci.obj}", hkxPath: $"{Const.CACHE_PATH}{ci.hkx}"))
+                    .Where(item => File.Exists(item.objPath)); // Skip non-existent OBJ files
+
+                int dop = Math.Max(1, Const.THREAD_COUNT); // Use full DOP unless multiple workers
+                await ModelConverter.OBJtoHKXBatch(items, maxDegree: dop, progressCallback: Lort.TaskIterate);
+
+                ExitCode = 0;
             }
+            catch (Exception ex)
+            {
+                Lort.Log($"HKX conversion worker failed: {ex.Message}", Lort.Type.Main);
+                ExitCode = -1;
+            }
+            finally
+            {
+                IsDone = true;
+            }
+        }
+
+        public static async Task Go(List<CollisionInfo> collisions)
+        {
+            Lort.Log($"Converting {collisions.Count} collision...", Lort.Type.Main);
+            Lort.NewTask("Converting HKX", collisions.Count);
+
+            // Defer materialization and filter invalid files
+            var items = collisions
+                .Select(ci => (objPath: $"{Const.CACHE_PATH}{ci.obj}", hkxPath: $"{Const.CACHE_PATH}{ci.hkx}"))
+                .Where(item => File.Exists(item.objPath)); // Skip non-existent OBJ files
+
+            int dop = Math.Max(1, Const.THREAD_COUNT);
+
+            ThreadPool.GetMinThreads(out int minWorker, out int minIOC);
+            if (minWorker < dop)
+                ThreadPool.SetMinThreads(dop, minIOC);
+
+            // Process all items in one batch for maximum parallelism
+            await ModelConverter.OBJtoHKXBatch(items, maxDegree: dop, progressCallback: Lort.TaskIterate);
         }
     }
 }
