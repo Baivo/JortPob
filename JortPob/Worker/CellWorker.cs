@@ -43,7 +43,7 @@ namespace JortPob.Worker
                 if (Const.DEBUG_EXCLUSIVE_CELL_BUILD_BY_NAME != null && !(node["name"] != null && node["name"].ToString() == Const.DEBUG_EXCLUSIVE_CELL_BUILD_BY_NAME)) { continue; }
                 if (Math.Abs(x) > Const.CELL_EXTERIOR_BOUNDS || Math.Abs(y) > Const.CELL_EXTERIOR_BOUNDS)
                 {
-                    if (!Const.DEBUG_EXCLUSIVE_INTERIOR_BUILD_NAME(node["name"].ToString()))
+                    if (!Const.DEBUG_EXCLUSIVE_INTERIOR_BUILD_NAME(node["name"].ToString()) || Const.DEBUG_SKIP_INTERIOR)
                     {
                         continue;
                     }

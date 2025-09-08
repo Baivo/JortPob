@@ -531,13 +531,6 @@ namespace JortPob.Model
                 matbin.Samplers[7].Unk14 = new Vector2(0f, 0f);
                 matbin.SourcePath = $"{matbinName}.matxml";
                 genMATBINs.TryAdd(matbinkey, matbin);
-
-                if (matbinName == "mat_landscape_bc_moss-bc_mud-missing")
-                {
-                    Console.WriteLine("HI AGAIN");
-                    //matbin.Params[15].Value = 123456789f;   // blend settings, these values result in a very normal linear 3 way blend
-                    //matbin.Params[16].Value = 123456789f;
-                }
             }
 
             FLVER2.BufferLayout layout = GetLayout($"{matbinTemplate}.matxml", true);

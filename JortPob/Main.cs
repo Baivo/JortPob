@@ -1,4 +1,5 @@
-﻿using JortPob.Common;
+﻿using HKLib.hk2018.hk;
+using JortPob.Common;
 using JortPob.Worker;
 using PortJob;
 using SoulsFormats;
@@ -18,17 +19,15 @@ namespace JortPob
             /* Startup logging */
             Lort.Initialize();
 
-            //BND4 generated = BND4.Read(@"I:\SteamLibrary\steamapps\common\ELDEN RING\Game\mod\map\m60\m60_10_10_02\m60_10_10_02_envmap_03_high_00.tpfbnd.dcx");
-            //BND4 original = BND4.Read(@"I:\SteamLibrary\steamapps\common\ELDEN RING\Game\map\m60\m60_10_10_02\m60_10_10_02_envmap_03_high_00.tpfbnd.dcx");
-
             /* Loading stuff */
-            ESM esm = new ESM($"{Const.MORROWIND_PATH}\\Data Files\\Morrowind.json");      // Morrowind ESM parse and partial serialization
+            ScriptManager scriptManager = new();                                                // Manages EMEVD scripts
+            ESM esm = new ESM($"{Const.MORROWIND_PATH}\\Data Files\\Morrowind.json", scriptManager);      // Morrowind ESM parse and partial serialization
             Cache cache = Cache.Load(esm);                                                  // Load existing cache (FAST!) or generate a new one (SLOW!)
             Paramanager param = new();                                                        // Class for managing PARAM files
-            TextManager text = new();
-            Layout layout = new(cache, esm, param, text);                                                 // Subdivides all content data from ESM into a more elden ring friendly format
-            SoundManager sound = new();
-            NpcManager character = new(esm, sound, param, text);
+            TextManager text = new();                                                           // Manages FMG text files
+            Layout layout = new(cache, esm, param, text, scriptManager);                          // Subdivides all content data from ESM into a more elden ring friendly format
+            SoundManager sound = new();                                                         // Manages vcbanks
+            NpcManager character = new(esm, sound, param, text, scriptManager);                 // Manages dialog esd
 
             /* Generate exterior msbs from layout */
             List<ResourcePool> msbs = new();
@@ -42,7 +41,7 @@ namespace JortPob
                 /* Generate msb from tile */
                 MSBE msb = new();
                 LightManager lightManager = new(tile.map, tile.coordinate, tile.block);
-                Script script = tile.GetType() == typeof(Tile) ? new Script(tile.map, tile.coordinate.x, tile.coordinate.y, tile.block) : null;
+                Script script = scriptManager.GetScript(tile);
                 ResourcePool pool = new(tile, msb, lightManager, script);
                 msb.Compression = SoulsFormats.DCX.Type.DCX_KRAK;
 
@@ -289,7 +288,7 @@ namespace JortPob
                 /* Generate msb from group */
                 MSBE msb = new();
                 LightManager lightManager = new(group.map, group.area, group.unk, group.block);
-                Script script = new Script(group.map, group.area, group.unk, group.block);
+                Script script = scriptManager.GetScript(group);
                 ResourcePool pool = new(group, msb, lightManager, script);
                 msb.Compression = SoulsFormats.DCX.Type.DCX_KRAK;
 
@@ -509,6 +508,56 @@ namespace JortPob
                 Lort.TaskIterate(); // Progress bar update
             }
 
+            {
+                /* DEBUG - Add a warp from church of elleh to Seyda Neen */
+                /* @TODO: DELETE THIS WHEN IT IS NO LONGER NEEDED! */
+                MSBE debugMSB = MSBE.Read(Utility.ResourcePath(@"test\m60_42_36_00.msb.dcx"));
+                MSBE.Part.Asset debugThingToDupe = null;
+                uint debugEntityIdNext = 1042360750;
+                foreach (MSBE.Part.Asset asset in debugMSB.Parts.Assets)
+                {
+                    if (asset.ModelName == "AEG099_309") { debugThingToDupe = asset; break; }
+                }
+
+                Script debugWarpScript = new(scriptManager.common, 60, 42, 36, 0);
+                debugWarpScript.init.Instructions.Add(debugWarpScript.AUTO.ParseAdd($"RegisterBonfire(1042360000, 1042361950, 0, 0, 0, 5);"));
+                debugWarpScript.init.Instructions.Add(debugWarpScript.AUTO.ParseAdd($"RegisterBonfire(1042360001, 1042361951, 0, 0, 0, 5);"));
+                List<String> debugWarpCellList = new() { "Seyda Neen", "Balmora", "Tel Mora", "Pelagiad", "Caldera", "Khuul", "Gnisis", "Ald Ruhn" };
+                int actionParamId = 1555, debugCounty = 0;
+                for (int i=0;i<debugWarpCellList.Count();i++)
+                {
+                    string areaName = debugWarpCellList[i];
+                    Tile area = layout.GetTile(areaName);
+                    if (area != null && area.warps.Count() > 0)
+                    {
+                        MSBE.Part.Asset debugAsset = (MSBE.Part.Asset)(debugThingToDupe.DeepCopy());
+                        debugAsset.Position = debugAsset.Position + new Vector3(2f * i, 0.5f, -1.1f * i);
+                        debugAsset.EntityID = debugEntityIdNext++;
+                        debugAsset.Name = $"AEG099_309_{9001 + debugCounty}";
+                        debugAsset.UnkPartNames[4] = $"AEG099_309_{9001 + debugCounty}";
+                        debugAsset.UnkPartNames[5] = $"AEG099_309_{9001 + debugCounty}";
+                        debugAsset.UnkT54PartName = $"AEG099_309_{9001 + debugCounty}";
+                        debugAsset.InstanceID++;
+                        debugMSB.Parts.Assets.Add(debugAsset);
+
+                        Script.Flag debugEventFlag = debugWarpScript.CreateFlag(Script.Flag.Category.Event, Script.Flag.Type.Bit, Script.Flag.Designation.Event, $"m{debugWarpScript.map}_{debugWarpScript.x}_{debugWarpScript.y}_{debugWarpScript.block}::DebugWarp");
+                        EMEVD.Event debugWarpEvent = new(debugEventFlag.id);
+
+                        param.GenerateActionButtonParam(text, actionParamId, $"Debug Warp: {areaName}");
+                        debugWarpEvent.Instructions.Add(debugWarpScript.AUTO.ParseAdd($"IfActionButtonInArea(MAIN, {actionParamId}, {debugAsset.EntityID});"));
+                        debugWarpEvent.Instructions.Add(debugWarpScript.AUTO.ParseAdd($"WarpPlayer({area.map}, {area.coordinate.x}, {area.coordinate.y}, 0, {area.warps[0].id}, 0)"));
+
+                        debugWarpScript.init.Instructions.Add(debugWarpScript.AUTO.ParseAdd($"InitializeEvent(0, {debugEventFlag.id})"));
+
+                        debugWarpScript.emevd.Events.Add(debugWarpEvent);
+                        actionParamId++;
+                        debugCounty++;
+                    }
+                }
+                debugWarpScript.Write();
+                debugMSB.Write($"{Const.OUTPUT_PATH}\\map\\mapstudio\\m60_42_36_00.msb.dcx");
+            }
+
             /* Write sound BNKs */
             sound.Write($"{Const.OUTPUT_PATH}sd\\enus\\");
 
@@ -554,19 +603,8 @@ namespace JortPob
             ResourcePool overworld = OverworldManager.Generate(cache, esm, layout, param);
             msbs.Insert(0, overworld); // this one takes the longest so we put it first so that the thread working on it has plenty of time to finish
 
-            /* Debug print thing */
-            if (Const.DEBUG_PRINT_LOCATION_INFO != null)
-            {
-                Cell cell = esm.GetCellByName(Const.DEBUG_PRINT_LOCATION_INFO);
-                foreach (Tile tile in layout.tiles)
-                {
-                    if (tile.PositionInside(cell.center))
-                    {
-                        Lort.Log($" ## DEBUG ## Found cell '{cell.name}' in m{tile.map}_{tile.coordinate.x}_{tile.coordinate.y}_{tile.block}", Lort.Type.Debug);
-                        break;
-                    }
-                }
-            }
+            /* Write emevd scripts */
+            scriptManager.Write();
 
             /* Write msbs */
             esm = null;  // free some memory here

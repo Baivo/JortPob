@@ -1,7 +1,9 @@
-﻿using SoulsFormats;
+﻿using JortPob.Common;
+using SoulsFormats;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace JortPob.Model
 {
@@ -34,79 +36,68 @@ namespace JortPob.Model
         public static FLVER2 Optimize(FLVER2 flver)
         {
             /* Delete unused materials */
-            for(int i=0;i<flver.Materials.Count();i++)
+            HashSet<int> usedMaterials = new();
+            foreach (FLVER2.Mesh mesh in flver.Meshes)
             {
-                // Check if unused
-                FLVER2.Material material = flver.Materials[i];
-                bool unused = true;
-                foreach(FLVER2.Mesh mesh in flver.Meshes)
-                {
-                    if (mesh.MaterialIndex == material.Index) { unused = false; break; }
-                }
-                // Delete and resolve indices
-                if (unused)
+                usedMaterials.Add(mesh.MaterialIndex);
+            }
+            for (int i = flver.Materials.Count - 1; i >= 0; i--)
+            {
+                if (!usedMaterials.Contains(i))
                 {
                     flver.Materials.RemoveAt(i);
-                    foreach(FLVER2.Material mat in flver.Materials)
+                    foreach (FLVER2.Material mat in flver.Materials)
                     {
-                        if(mat.Index > i) { mat.Index--; }
+                        if (mat.Index > i) { mat.Index--; }
                     }
-                    foreach(FLVER2.Mesh mesh in flver.Meshes)
+                    foreach (FLVER2.Mesh mesh in flver.Meshes)
                     {
-                        if(mesh.MaterialIndex > i) { mesh.MaterialIndex--; }
+                        if (mesh.MaterialIndex > i) { mesh.MaterialIndex--; }
                     }
-                    i--;
                 }
             }
 
             /* Delete unused bufferlayouts */
-            for (int i = 0; i < flver.BufferLayouts.Count(); i++)
+            HashSet<int> usedLayouts = new();
+            foreach (FLVER2.Mesh mesh in flver.Meshes)
             {
-                // Check if unused
-                FLVER2.BufferLayout layout = flver.BufferLayouts[i];
-                bool unused = true;
-                foreach (FLVER2.Mesh mesh in flver.Meshes)
+                foreach (FLVER2.VertexBuffer buffer in mesh.VertexBuffers)
                 {
-                    foreach(FLVER2.VertexBuffer buffer in mesh.VertexBuffers)
-                    {
-                        if(buffer.LayoutIndex == i) { unused = false; break; }
-                    }
-                    if(!unused) { break; }
+                    usedLayouts.Add(buffer.LayoutIndex);
                 }
-                // Delete and resolve indices
-                if (unused)
+            }
+
+            for (int i = flver.BufferLayouts.Count - 1; i >= 0; i--)
+            {
+                if (!usedLayouts.Contains(i))
                 {
                     flver.BufferLayouts.RemoveAt(i);
                     foreach (FLVER2.Mesh mesh in flver.Meshes)
                     {
-                        foreach(FLVER2.VertexBuffer vb in mesh.VertexBuffers)
+                        foreach (FLVER2.VertexBuffer vb in mesh.VertexBuffers)
                         {
                             if (vb.LayoutIndex > i) { vb.LayoutIndex--; }
                         }
                     }
-                    i--;
                 }
             }
 
+
             /* Delete unused gxlists */
-            for (int i = 0; i < flver.GXLists.Count(); i++)
+            HashSet<int> usedGXLists = new();
+            foreach (FLVER2.Material mat in flver.Materials)
             {
-                // Check if unused
-                FLVER2.GXList gxlist = flver.GXLists[i];
-                bool unused = true;
-                foreach (FLVER2.Material mat in flver.Materials)
-                {
-                    if (mat.GXIndex == i) { unused = false; break; }
-                }
-                // Delete and resolve indices
-                if (unused)
+                usedGXLists.Add(mat.GXIndex);
+            }
+            for (int i = flver.GXLists.Count - 1; i >= 0; i--)
+            {
+                if (!usedGXLists.Contains(i))
                 {
                     flver.GXLists.RemoveAt(i);
                     foreach (FLVER2.Material mat in flver.Materials)
                     {
-                        if(mat.GXIndex > i) { mat.GXIndex--; }
+                        if (mat.GXIndex > i) { mat.GXIndex--; }
                     }
-                    i--;
                 }
             }
 
@@ -116,26 +107,21 @@ namespace JortPob.Model
                 List<FLVER.Vertex> verts = mesh.Vertices; // original vertices
                 mesh.Vertices = new();
 
+                Dictionary<VertexKey, int> vertexLookup = new();
+
                 int GetIndex(FLVER.Vertex v)
                 {
-                    for(int i=0;i<mesh.Vertices.Count();i++)
+                    VertexKey key = new VertexKey(v);
+
+                    if (vertexLookup.TryGetValue(key, out int existingIndex))
                     {
-                        FLVER.Vertex vert = mesh.Vertices[i];
-                        // check if vertex is a match
-                        if
-                        (
-                            vert.Position == v.Position &&   // @TODO: probably not good enough tbh, should look into rounding and comparison of values directly
-                            vert.Normal == v.Normal &&
-                            vert.UVs[0] == v.UVs[0] &&
-                            (vert.UVs.Count() > 1 ? vert.UVs[1] == v.UVs[1] : true)
-                        )
-                        {
-                            return i;
-                        }
+                        return existingIndex;
                     }
 
+                    int newIndex = mesh.Vertices.Count;
                     mesh.Vertices.Add(v);
-                    return mesh.Vertices.Count - 1;
+                    vertexLookup[key] = newIndex;
+                    return newIndex;
                 }
 
                 foreach (FLVER2.FaceSet faceSet in mesh.FaceSets)
@@ -150,10 +136,59 @@ namespace JortPob.Model
                         faceSet.Indices.Add(index);
                     }
                 }
-                Console.WriteLine("DEBUG");
+
             }
 
             return flver;
+        }
+
+        private struct VertexKey : IEquatable<VertexKey>
+        {
+            private readonly Vector3 position;
+            private readonly Vector3 normal;
+            private readonly List<Vector3> uvs;
+            private readonly int hashCode;
+
+            public VertexKey(FLVER.Vertex vertex)
+            {
+                position = vertex.Position;
+                normal = vertex.Normal;
+                foreach(Vector3 uv in  vertex.UVs)
+                {
+                    uvs.Add(uv);
+                }
+
+                string uvCombinedHash = "";
+                foreach (Vector3 uv in uvs)
+                {
+                    uvCombinedHash += $"[{uv.X},{uv.Y}]";  // prolly not ideal but i dont want a 8 way switch on uv.count() or smth like that
+                }
+
+                hashCode = HashCode.Combine(position, normal, uvCombinedHash);
+            }
+
+            public bool Equals(VertexKey other)
+            {
+                if (uvs.Count() != other.uvs.Count()) { return false; }
+
+                for (int i = 0; i < uvs.Count(); i++)
+                {
+                    if (!uvs[i].TolerantEquals(other.uvs[i], 0.0001f)) { return false; }
+                }
+
+                return position.TolerantEquals(other.position, 0.0001f) &&
+                       normal.TolerantEquals(other.normal, 0.0001f);
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is VertexKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                return hashCode;
+            }
         }
     }
 }

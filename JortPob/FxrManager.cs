@@ -160,9 +160,8 @@ namespace JortPob
                 }
             }
 
-            /* Files have to be sorted because order of files in ffxbnd must match id order. Fuck if I know why from did this but they did */
-            // ffxbnd.Files.OrderBy(x => x.ID); // doesn't work, dont know why. lol lmaao.....
-            Utility.SortBND4(ffxbnd); // fxrs  REALLY care about being sorted correctly so yeah
+            // for some reason bnds have to be sorted by ID
+            Utility.SortBND4(ffxbnd);
 
             List<int> maps = new();
             maps.Add(60); // for the overworld
@@ -173,9 +172,12 @@ namespace JortPob
                 maps.Add(group.map);
             }
 
+            Lort.Log($"Writing {maps.Count} FFX Binder files... ", Lort.Type.Main);
+            Lort.NewTask($"Writing {maps.Count} FFX Binder files... ", maps.Count);
             foreach (int map in maps)
             {
                 ffxbnd.Write($"{Const.OUTPUT_PATH}sfx\\sfxbnd_m{map.ToString("D2")}.ffxbnd.dcx");
+                Lort.TaskIterate();
             }
         }
 

@@ -1,10 +1,69 @@
-﻿using System;
+﻿using SoulsFormats;
+using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace JortPob.Common
 {
+    public sealed class BinderFileIdComparer : IComparer<BinderFile>
+    {
+        readonly Dictionary<BinderFile, uint> _cache = new();
+
+        public int Compare(BinderFile x, BinderFile y)
+        {
+            uint xi = GetId(x);
+            uint yi = GetId(y);
+            return xi < yi ? -1 : (xi > yi ? 1 : 0);
+        }
+
+        uint GetId(BinderFile f)
+        {
+            if (f == null) return uint.MaxValue;
+            if (_cache.TryGetValue(f, out uint v)) return v;
+            uint id = ParseBinderFileId(f);
+            _cache[f] = id;
+            return id;
+        }
+
+        public static uint ParseBinderFileId(BinderFile file)
+        {
+            if (file == null || string.IsNullOrEmpty(file.Name)) return uint.MaxValue;
+            string name = Utility.PathToFileName(file.Name);
+            if (string.IsNullOrEmpty(name)) return uint.MaxValue;
+
+            // fast common-case: names like "m0123"
+            if (name.Length > 1)
+            {
+                string digits = name.Substring(1);
+                if (uint.TryParse(digits, out uint parsed)) return parsed;
+            }
+
+            // fallback: extract first contiguous digit run
+            uint value = 0;
+            bool found = false;
+            for (int i = 0; i < name.Length; i++)
+            {
+                char c = name[i];
+                if (c >= '0' && c <= '9')
+                {
+                    found = true;
+                    value = value * 10 + (uint)(c - '0');
+                }
+                else if (found)
+                {
+                    break;
+                }
+            }
+            return found ? value : uint.MaxValue;
+        }
+    }
+
     public static class Vector3Extension
     {
+        // helps with sorting vec3s faster
+        public static float SqrMagnitude(this Vector3 vector) => vector.X * vector.X + vector.Y * vector.Y + vector.Z * vector.Z;
+
+
         public static bool IsNaN(this Vector3 vec3)
         {
             return float.IsNaN(vec3.X) | float.IsNaN(vec3.Y) | float.IsNaN(vec3.Z);
@@ -19,9 +78,9 @@ namespace JortPob.Common
             );
         }*/
 
-        public static bool TolerantEquals(this Vector3 A, Vector3 B)
+        public static bool TolerantEquals(this Vector3 A, Vector3 B, float precision = 0.001f)
         {
-            return Vector3.Distance(A, B) <= 0.001f; // imprecision really do be a cunt
+            return Vector3.Distance(A, B) <= precision; // imprecision really do be a cunt
         }
     }
 

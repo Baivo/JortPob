@@ -653,6 +653,10 @@ namespace JortPob
         /* Returns true if added, false if not added */
         public static List<Cutout> CUTOUTS = new();
         public static List<ShapedCutout> SHAPED_CUTOUTS = new(); // literally like 2 things. we almost got away with just using squares but bethesda really just HAD to fuck it up
+
+        private static readonly Dictionary<Cutout.Type, List<Cutout>> CUTOUTS_BY_TYPE = new();
+        private static readonly Dictionary<Cutout.Type, List<Cutout>> SHAPED_CUTOUTS_BY_TYPE = new();
+
         public static bool AddCutout(Content content)
         {
             float s;
@@ -674,31 +678,52 @@ namespace JortPob
             {
                 ShapedCutout cutout = new(type, content.position - offsetJank, content.rotation, content.mesh);
                 SHAPED_CUTOUTS.Add(cutout);
+
+                if (SHAPED_CUTOUTS_BY_TYPE.TryGetValue(type, out List<Cutout> value))
+                    value.Add(cutout);
+                else
+                    SHAPED_CUTOUTS_BY_TYPE.Add(type, [cutout]);
+
                 return true;
             }
             else
             {
                 Cutout cutout = new(type, content.position - offsetJank, content.rotation, s);
                 CUTOUTS.Add(cutout);
+
+                if (CUTOUTS_BY_TYPE.TryGetValue(type, out List<Cutout> value))
+                    value.Add(cutout);
+                else
+                    CUTOUTS_BY_TYPE.Add(type, [cutout]);
+
                 return true;
             }
         }
 
         public static bool PointInCutout(Cutout.Type type, Vector3 position, bool includeShapedCutouts = false)
         {
-            foreach(Cutout cutout in CUTOUTS)
+            var positionY = position.Y;
+
+            // Check regular cutouts of this type only
+            if (CUTOUTS_BY_TYPE.TryGetValue(type, out var regularCutouts))
             {
-                if(cutout.type != type) { continue; }
-                if (cutout.IsInside(position, false) && position.Y <= cutout.height) { return true; }
-            }
-            if (includeShapedCutouts)
-            {
-                foreach (Cutout cutout in SHAPED_CUTOUTS)
+                foreach (var cutout in regularCutouts)
                 {
-                    if (cutout.type != type) { continue; }
-                    if (cutout.IsInside(position, false) && position.Y <= cutout.height) { return true; }
+                    if (positionY <= cutout.height && cutout.IsInside(position, false))
+                        return true;
                 }
             }
+
+            // Check shaped cutouts of this type only
+            if (includeShapedCutouts && SHAPED_CUTOUTS_BY_TYPE.TryGetValue(type, out var shapedCutouts))
+            {
+                foreach (var cutout in shapedCutouts)
+                {
+                    if (positionY <= cutout.height && cutout.IsInside(position, false))
+                        return true;
+                }
+            }
+
             return false;
         }
 
@@ -937,22 +962,17 @@ namespace JortPob
 
                                         List<Vector3> FindNearest(Vector3 p, List<Vector3> ps)
                                         {
-                                            List<Vector3> nearest = new();
-                                            nearest.AddRange(ps);
-                                            for (int k = 0; k < nearest.Count - 1; k++)
-                                            {
-                                                float distA = Vector3.Distance(p, nearest[k]);
-                                                float distB = Vector3.Distance(p, nearest[k + 1]);
+                                            if (ps == null) return new List<Vector3>();
+                                            int n = ps.Count;
+                                            if (n <= 1) return new List<Vector3>(ps);
 
-                                                if (distB < distA)
-                                                {
-                                                    Vector3 temp = nearest[k];
-                                                    nearest[k] = nearest[k + 1];
-                                                    nearest[k + 1] = temp;
-                                                    k = 0; // start sort over since we changed the list. very inefficient but fucking bruh whatever
-                                                }
-                                            }
-                                            return nearest;
+                                            Vector3[] arr = ps.ToArray();          // copy to array (fast)
+                                            float[] keys = new float[n];          // distance keys (squared)
+                                            for (int i = 0; i < n; i++)
+                                                keys[i] = (arr[i] - p).SqrMagnitude();
+
+                                            Array.Sort(keys, arr);                // sorts keys and reorders arr accordingly
+                                            return arr.ToList();        // return sorted list (closest first)
                                         }
 
                                         for (int i= 0;i<points.Count();i++)
@@ -2139,6 +2159,7 @@ namespace JortPob
             public readonly Vector3 position, rotation;
             public float size;
             public float height;
+
             public Cutout(Type type, Vector3 position, Vector3 rotation, float size)
             {
                 this.type = type;
@@ -2218,6 +2239,9 @@ namespace JortPob
             // Convex shape test, code adapted from a triangle sameside point inside example
             public bool IsInside(Vector3 v, bool edgeInclusive)
             {
+                if (Vector3.DistanceSquared(v, position) > size * size)
+                    return false;
+
                 if (edgeInclusive)
                 {
                     foreach (Vector3 p in Points())
@@ -2237,10 +2261,10 @@ namespace JortPob
 
                 // Iterate through all our edges and make sure the point always falls on the same side of an edge as the next edge endpoint
                 List<WetEdge> edges = Edges();
-                for(int i=0;i<edges.Count();i++)
+                for (int i = 0; i < edges.Count; i++)
                 {
                     WetEdge edge = edges[i];
-                    WetEdge next = edges[(i+1) % edges.Count];
+                    WetEdge next = edges[(i + 1) % edges.Count];
                     if (!SameSide(v, next.b, edge)) { return false; }
                 }
 

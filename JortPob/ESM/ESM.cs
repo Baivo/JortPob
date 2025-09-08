@@ -1,11 +1,18 @@
-﻿using JortPob.Common;
+﻿using HKLib.hk2018.hkaiCollisionAvoidance.Solver;
+using HKLib.hk2018.hke;
+using JortPob.Common;
 using JortPob.Worker;
+using static JortPob.Dialog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using static JortPob.NpcContent;
+using static JortPob.NpcManager.TopicData;
+using static JortPob.Script;
 
 namespace JortPob
 {
@@ -24,7 +31,7 @@ namespace JortPob
         public List<Cell> exterior, interior;
         private ConcurrentBag<Landscape> landscapes;
 
-        public ESM(string path)
+        public ESM(string path, ScriptManager scriptManager)
         {
             Lort.Log($"Loading '{path}' ...", Lort.Type.Main);
 
@@ -72,13 +79,28 @@ namespace JortPob
 
                     if(current != null && current.type == DialogRecord.Type.Greeting && dtype == DialogRecord.Type.Greeting) { continue; } // skip so we can merge all 9 greeting levels into a single thingy
 
-                    current = new(dtype, idstr);
+                    current = new(dtype, idstr, scriptManager.common.CreateFlag(Script.Flag.Category.Saved, Script.Flag.Type.Bit, Script.Flag.Designation.TopicEnabled, idstr));
                     dialog.Add(current);
                 }
                 else if(type == Type.DialogueInfo)
                 {
                     DialogInfoRecord dialogInfoRecord = new(current.type, json[i]);
                     current.infos.Add(dialogInfoRecord);
+                }
+            }
+
+            /* Post process, looking for topic unlocks */
+            foreach (DialogRecord topic in dialog)
+            {
+                foreach(DialogInfoRecord info in topic.infos)
+                {
+                    foreach (DialogRecord otherTopic in dialog) {
+                        if (info.text.ToLower().Contains(otherTopic.id.ToLower()))
+                        {
+                            if (topic == otherTopic) { continue; } // prevent self succ
+                            info.unlocks.Add(otherTopic);
+                        }
+                    }
                 }
             }
 
@@ -186,34 +208,36 @@ namespace JortPob
         }
 
         /* Get dialog and character data for building esd */
-        public List<Tuple<DialogRecord, DialogInfoRecord>> GetDialog(NpcContent npc)
+        public List<Tuple<DialogRecord, List<DialogInfoRecord>>> GetDialog(NpcContent npc)
         {
-            List<Tuple<DialogRecord, DialogInfoRecord>> d = new();
+            List<Tuple<DialogRecord, List<DialogInfoRecord>>> ds = new();  // i am really sorry about this type
             foreach(DialogRecord dialogRecord in dialog)
             {
                 if (dialogRecord.type == DialogRecord.Type.Journal) { continue; } // obviously skip these lmao
 
-                // Check if the npc meets requirements for this topic or w/e
+                // Check if the npc meets requirements for any lines in this topic
+                List<DialogInfoRecord> infos = new();
                 foreach(DialogInfoRecord info in dialogRecord.infos)
                 {
-                    // Check if the npc meets all requirements for this dialog line
+                    // Check if the npc meets all static requirements for this dialog line
                     if (info.speaker != null && info.speaker != npc.id) { continue; }
                     if (info.race != NpcContent.Race.Any && info.race != npc.race) { continue; }
                     if (info.job != null && info.job != npc.job) { continue; }
                     if (info.faction != null && info.faction != npc.faction) { continue; }
-                    if (info.disposition > npc.disposition) { continue; }
                     if (info.rank > npc.rank) { continue; }
                     if (info.cell != null && info.cell != npc.cell.name) { continue; }
                     if (info.sex != NpcContent.Sex.Any && info.sex != npc.sex) { continue; }
-                    if (info.filters && dialogRecord.type == DialogRecord.Type.Greeting) { continue; }                     // @TODO: STUB, just discarding on filters or player data checks
-                    if (info.playerFaction != null) { continue; }
 
-                    d.Add(new(dialogRecord, info));
-                    break;
+                    infos.Add(info);
+
+                    // If this line has no filters it means that anything below it is unreachable, so we just break in that case
+                    if (info.filters.Count() <= 0 && info.playerFaction == null && info.playerRank <= 0 && info.disposition <= 0) { break; }
                 }
+
+                if (infos.Count() > 0) { ds.Add(new(dialogRecord, infos)); } // discard if no valid lines
             }
 
-            return d;
+            return ds;
         }
     }
 
@@ -225,77 +249,6 @@ namespace JortPob
         {
             this.type = type;
             this.json = json;
-        }
-    }
-
-    /* Just a serializiation of the dialog and dialoginfo thingies. We will be iterating through them a lot so may as well do it. */
-    public class DialogRecord
-    {
-        public enum Type
-        {
-            Greeting, Topic, Journal,
-            Alarm, Attack, Flee, Hello, Hit, Idle, Intruder, Thief, 
-            AdmireFail, AdmireSuccess, BribeFail, BribeSuccess, InfoRefusal, InfoFail, IntimidateFail, IntimidateSuccess, ServiceRefusal, TauntFail, TauntSuccess
-        }
-
-        public readonly Type type;
-        public readonly string id;
-
-        public readonly List<DialogInfoRecord> infos;
-
-        public DialogRecord(Type type, string id)
-        {
-            this.type = type;
-            this.id = id;
-
-            infos = new();
-        }
-    }
-
-    public class DialogInfoRecord
-    {
-        private static uint NEXT_ID = 0;
-
-        public readonly uint id; // generated id used when lookin up wems, not used by elden ring or morrowind
-        public readonly DialogRecord.Type type;
-
-        // static requirements for a dialog to be added
-        public readonly string speaker, job, faction, cell;
-        public readonly int rank;
-        public readonly NpcContent.Race race;
-        public readonly NpcContent.Sex sex;
-
-        // non-static requirements
-        public readonly string playerFaction;
-        public readonly int disposition, playerRank;
-
-        public readonly bool filters; // STUB!!! @TODO: actually implement later once we have script data managed
-
-        public readonly string text; // actual dialog text
-
-        public DialogInfoRecord(DialogRecord.Type type, JsonNode json)
-        {
-            id = DialogInfoRecord.NEXT_ID++;
-            this.type = type;
-
-            string NullEmpty(string s) { return s.Trim() == "" ? null : s; }
-
-            speaker = NullEmpty(json["speaker_id"].ToString());
-            string raceStr = NullEmpty(json["speaker_race"].ToString());
-            race = raceStr != null ? (NpcContent.Race)System.Enum.Parse(typeof(NpcContent.Race), raceStr.Replace(" ", "")) : NpcContent.Race.Any;
-            job = NullEmpty(json["speaker_class"].ToString());
-            faction = NullEmpty(json["speaker_faction"].ToString());
-            cell = NullEmpty(json["speaker_cell"].ToString());
-            rank = int.Parse(json["data"]["speaker_rank"].ToString());
-            Enum.TryParse(json["data"]["speaker_sex"].ToString(), out sex);
-
-            playerFaction = NullEmpty(json["player_faction"].ToString());
-            disposition = int.Parse(json["data"]["disposition"].ToString());
-            playerRank = int.Parse(json["data"]["player_rank"].ToString());
-
-            filters = json["filters"].AsArray().Count() > 0;
-
-            text = json["text"].ToString();
         }
     }
 }

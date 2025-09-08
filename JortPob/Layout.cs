@@ -18,7 +18,7 @@ namespace JortPob
 
         public List<InteriorGroup> interiors;
 
-        public Layout(Cache cache, ESM esm, Paramanager param, TextManager text)
+        public Layout(Cache cache, ESM esm, Paramanager param, TextManager text, ScriptManager scriptManager)
         {
             all = new();
             huges = new();
@@ -252,7 +252,7 @@ namespace JortPob
                         door.warp.x = to.group.area;
                         door.warp.y = to.group.unk;
                         door.warp.block = to.group.block;
-                        door.warp.entity = Script.Global.NextEntityId(door.warp.map, door.warp.x, door.warp.y, door.warp.block, 0);
+                        door.warp.entity = scriptManager.GetScript(to.group).CreateEntity(Script.EntityType.Region);
                         to.AddWarp(door.warp);
                     }
                     // Door goes to exterior cell
@@ -264,7 +264,7 @@ namespace JortPob
                         door.warp.x = to.coordinate.x;
                         door.warp.y = to.coordinate.y;
                         door.warp.block = to.block;
-                        door.warp.entity = Script.Global.NextEntityId(door.warp.map, door.warp.x, door.warp.y, door.warp.block, 0);
+                        door.warp.entity = scriptManager.GetScript(to).CreateEntity(Script.EntityType.Region);
                         to.AddWarp(door.warp);
                     }
                 }
@@ -277,7 +277,7 @@ namespace JortPob
                     foreach(DoorContent door in chunk.doors)
                     {
                         HandleDoor(door);
-                        if(door.warp != null) { door.entity = Script.Global.NextEntityId(group.map, group.area, group.unk, group.block, 1); }
+                        if(door.warp != null) { door.entity = scriptManager.GetScript(group).CreateEntity(Script.EntityType.Asset); }
                     }
                 }
             }
@@ -287,7 +287,7 @@ namespace JortPob
                 foreach (DoorContent door in tile.doors)
                 {
                     HandleDoor(door);
-                    if (door.warp != null) { door.entity = Script.Global.NextEntityId(tile.map, tile.coordinate.x, tile.coordinate.y, tile.block, 1); }
+                    if (door.warp != null) { door.entity = scriptManager.GetScript(tile).CreateEntity(Script.EntityType.Asset); }
                 }
             }
 
@@ -376,6 +376,24 @@ namespace JortPob
             return null;
         }
 
+        /* Get an overworld tile that contains the cell of the given name */
+        public Tile GetTile(string cellName)
+        {
+            foreach(Tile tile in tiles)
+            {
+                foreach(Cell cell in tile.cells)
+                {
+                    if(cell.name == cellName)
+                    {
+                        return tile;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /* Generates a list of map ids that are being used */
+        /* This is the first number in the msb name. m60 for example is overworld */
         public List<int> ListCommon()
         {
             List<int> list = new();

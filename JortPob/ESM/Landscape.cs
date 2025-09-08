@@ -17,6 +17,7 @@ namespace JortPob
         public readonly string flags;
 
         public readonly List<Vertex> vertices;
+        public readonly Dictionary<Vertex, int> vertIndMap;
         public readonly List<int>[] indices;   // 0 is full detail, 1 is reduced detail for lod, 2 is minimum possible detail for super overworld
         public readonly Vertex[,] borders;
 
@@ -107,6 +108,7 @@ namespace JortPob
             /* Vertex Data */
             Vector3 centerOffset = new Vector3((Const.CELL_SIZE / 2f), 0f, -(Const.CELL_SIZE / 2f));
             vertices = new();
+            vertIndMap = new();
             Vertex[,] vertgrid = new Vertex[Const.CELL_GRID_SIZE+1, Const.CELL_GRID_SIZE+1];
             float last = offset;
             float lastEdge = last;
@@ -135,6 +137,7 @@ namespace JortPob
                     }
 
                     Vertex vertex = new Vertex(position, grid, Vector3.Normalize(new Vector3(iii, kkk, jjj)), new Vector2(xx * (1f / Const.CELL_GRID_SIZE), yy * (1f / Const.CELL_GRID_SIZE)), color, ltex[Math.Min((xx) / 4, 15), Math.Min((Const.CELL_GRID_SIZE - yy) / 4, 15)]);
+                    vertIndMap.Add(vertex, vertices.Count);
                     vertices.Add(vertex);
                     vertgrid[xx, yy] = vertex;
                 }
@@ -291,17 +294,6 @@ namespace JortPob
                     }
                 }
 
-                int GetSkirtIndex(Vertex vert)
-                {
-                    for (int i = 0; i < vertices.Count(); i++)
-                    {
-                        Vertex v = vertices[i];
-                        if (v == vert) { return i; }
-                    }
-                    return -1; // instant death, should not happen
-                }
-
-
                 // Y0 border
                 Vertex vlast = null;
                 for (int xx = 0; xx <= Const.CELL_GRID_SIZE; xx += lod.DIVISOR)
@@ -315,16 +307,16 @@ namespace JortPob
                     {
                         Vertex v1 = vertgrid[f, 0];
                         Vertex v2 = vertgrid[f + 1, 0];
-                        indices[lod.INDEX].Add(GetSkirtIndex(vroot));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v2));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v1));
+                        indices[lod.INDEX].Add(vertIndMap[vroot]);
+                        indices[lod.INDEX].Add(vertIndMap[v2]);
+                        indices[lod.INDEX].Add(vertIndMap[v1]);
                     }
                     if (vlast != null && vlast != vroot)
                     {
                         Vertex v = vertgrid[start, 0];
-                        indices[lod.INDEX].Add(GetSkirtIndex(vroot));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v));
-                        indices[lod.INDEX].Add(GetSkirtIndex(vlast));
+                        indices[lod.INDEX].Add(vertIndMap[vroot]);
+                        indices[lod.INDEX].Add(vertIndMap[v]);
+                        indices[lod.INDEX].Add(vertIndMap[vlast]);
                     }
                     vlast = vroot;
                 }
@@ -343,16 +335,16 @@ namespace JortPob
                     {
                         Vertex v1 = vertgrid[f, Yp];
                         Vertex v2 = vertgrid[f + 1, Yp];
-                        indices[lod.INDEX].Add(GetSkirtIndex(vroot));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v1));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v2));
+                        indices[lod.INDEX].Add(vertIndMap[vroot]);
+                        indices[lod.INDEX].Add(vertIndMap[v1]);
+                        indices[lod.INDEX].Add(vertIndMap[v2]);
                     }
                     if (vlast != null && vlast != vroot)
                     {
                         Vertex v = vertgrid[start, Yp];
-                        indices[lod.INDEX].Add(GetSkirtIndex(vroot));
-                        indices[lod.INDEX].Add(GetSkirtIndex(vlast));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v));
+                        indices[lod.INDEX].Add(vertIndMap[vroot]);
+                        indices[lod.INDEX].Add(vertIndMap[vlast]);
+                        indices[lod.INDEX].Add(vertIndMap[v]);
                     }
                     vlast = vroot;
                 }
@@ -370,16 +362,16 @@ namespace JortPob
                         {
                             Vertex v1 = vertgrid[0, f];
                             Vertex v2 = vertgrid[0, f + 1];
-                            indices[lod.INDEX].Add(GetSkirtIndex(vroot));
-                            indices[lod.INDEX].Add(GetSkirtIndex(v1));
-                            indices[lod.INDEX].Add(GetSkirtIndex(v2));
+                            indices[lod.INDEX].Add(vertIndMap[vroot]);
+                            indices[lod.INDEX].Add(vertIndMap[v1]);
+                            indices[lod.INDEX].Add(vertIndMap[v2]);
                         }
                         if (vlast != null && vlast != vroot)
                         {
                             Vertex v = vertgrid[0, start];
-                            indices[lod.INDEX].Add(GetSkirtIndex(vroot));
-                            indices[lod.INDEX].Add(GetSkirtIndex(vlast));
-                            indices[lod.INDEX].Add(GetSkirtIndex(v));
+                            indices[lod.INDEX].Add(vertIndMap[vroot]);
+                            indices[lod.INDEX].Add(vertIndMap[vlast]);
+                            indices[lod.INDEX].Add(vertIndMap[v]);
                         }
                         vlast = vroot;
                 }
@@ -398,16 +390,16 @@ namespace JortPob
                     {
                         Vertex v1 = vertgrid[Xp, f];
                         Vertex v2 = vertgrid[Xp, f + 1];
-                        indices[lod.INDEX].Add(GetSkirtIndex(vroot));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v2));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v1));
+                        indices[lod.INDEX].Add(vertIndMap[vroot]);
+                        indices[lod.INDEX].Add(vertIndMap[v2]);
+                        indices[lod.INDEX].Add(vertIndMap[v1]);
                     }
                     if (vlast != null && vlast != vroot)
                     {
                         Vertex v = vertgrid[Xp, start];
-                        indices[lod.INDEX].Add(GetSkirtIndex(vroot));
-                        indices[lod.INDEX].Add(GetSkirtIndex(v));
-                        indices[lod.INDEX].Add(GetSkirtIndex(vlast));
+                        indices[lod.INDEX].Add(vertIndMap[vroot]);
+                        indices[lod.INDEX].Add(vertIndMap[v]);
+                        indices[lod.INDEX].Add(vertIndMap[vlast]);
                     }
                     vlast = vroot;
                 }
@@ -504,19 +496,6 @@ namespace JortPob
                 GetMesh(texset);
             }
 
-            /* Now that we've made the meshes we need fill out those indices */
-            int GetIndex(Mesh mesh, Vertex vert)
-            {
-                for (int i = 0;i<mesh.vertices.Count();i++)
-                {
-                    Vertex v = mesh.vertices[i];
-                    if (v == vert) { return i; }
-                }
-
-                mesh.vertices.Add(vert);
-                return mesh.vertices.Count() - 1;
-            }
-
             foreach (Const.LOD_VALUE lod in Const.TERRAIN_LOD_VALUES)
             {
                 for (int itr = 0; itr < indices[lod.INDEX].Count; itr += 3)
@@ -536,9 +515,9 @@ namespace JortPob
 
                     Mesh mesh = GetMesh(texs);
 
-                    int A = GetIndex(mesh, a);
-                    int B = GetIndex(mesh, b);
-                    int C = GetIndex(mesh, c);
+                    int A = mesh.AddVertex(a);
+                    int B = mesh.AddVertex(b);
+                    int C = mesh.AddVertex(c);
 
                     mesh.indices[lod.INDEX].Add(A);
                     mesh.indices[lod.INDEX].Add(B);
@@ -575,6 +554,7 @@ namespace JortPob
             public readonly List<Texture> textures;
             public readonly List<int>[] indices;    
             public readonly List<Vertex> vertices;
+            public readonly Dictionary<Vertex, int> vertices_indices;
 
             public readonly MaterialContext.MaterialTemplate template;
 
@@ -583,7 +563,18 @@ namespace JortPob
                 this.textures = textures;
                 indices = new List<int>[] { new(), new(), new() };  // 0 is full detail, 1 is reduced detail for lod, 2 is minimum possible detail for super overworld
                 vertices = new();
+                vertices_indices = new();
                 this.template = template;
+            }
+
+            public int AddVertex(Vertex vertex)
+            {
+                if (vertices_indices.TryGetValue(vertex, out int existing_index))
+                    return existing_index;
+                var index = vertices.Count;
+                vertices_indices.Add(vertex, vertices.Count);
+                vertices.Add(vertex);
+                return index;
             }
         }
 

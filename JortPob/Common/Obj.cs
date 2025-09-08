@@ -92,43 +92,42 @@ namespace JortPob.Common
         public Obj optimize() {
             Obj nu = new();
 
+            Dictionary<Vector3, int> vsLookup = new();
+            Dictionary<Vector3, int> vnsLookup = new();
+            Dictionary<Vector3, int> vtsLookup = new();
+
             int[] GetIndex(Vector3 v, Vector3 vn, Vector3 vt)
             {
-                int[] indset = new int[] { -1, -1, -1 };
+                int[] indset = new int[3];
+
                 // V
-                for(int i=0;i<nu.vs.Count();i++)
+                if (!vsLookup.TryGetValue(v, out indset[0]))
                 {
-                    if (nu.vs[i] == v) { indset[0] = i; break; }
-                }
-                if (indset[0] == -1) {
+                    indset[0] = nu.vs.Count;
                     nu.vs.Add(v);
-                    indset[0] = nu.vs.Count() - 1;
+                    vsLookup[v] = indset[0];
                 }
-                //VN
-                for (int i = 0; i < nu.vns.Count(); i++)
+
+                // VN  
+                if (!vnsLookup.TryGetValue(vn, out indset[1]))
                 {
-                    if (nu.vns[i] == vn) { indset[1] = i; break; }
-                }
-                if (indset[1] == -1)
-                {
+                    indset[1] = nu.vns.Count;
                     nu.vns.Add(vn);
-                    indset[1] = nu.vns.Count() - 1;
+                    vnsLookup[vn] = indset[1];
                 }
-                //VT
-                for (int i = 0; i < nu.vts.Count(); i++)
+
+                // VT
+                if (!vtsLookup.TryGetValue(vt, out indset[2]))
                 {
-                    if (nu.vts[i] == vt) { indset[2] = i; break; }
-                }
-                if (indset[2] == -1)
-                {
+                    indset[2] = nu.vts.Count;
                     nu.vts.Add(vt);
-                    indset[2] = nu.vts.Count() - 1;
+                    vtsLookup[vt] = indset[2];
                 }
 
                 return indset;
             }
 
-            foreach(ObjG g in gs)
+            foreach (ObjG g in gs)
             {
                 ObjG nug = new();
                 nug.name = g.name;

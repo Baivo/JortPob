@@ -886,6 +886,12 @@
     <None Update="Resources\overrides\static_collision.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\script\common.emevd.dcx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\script\common_func.emevd.dcx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\script\er-common.emedf.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -932,6 +938,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="Resources\test\l.hkxbhd">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\test\m60_42_36_00.msb.dcx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="Resources\test\test.compendium">

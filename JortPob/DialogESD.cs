@@ -1,104 +1,113 @@
 ﻿using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
+using static JortPob.NpcManager.TopicData;
+using static SoulsFormats.DRB.Shape;
+using static SoulsFormats.MSBS.Event;
+using static JortPob.Dialog;
 
 namespace JortPob
 {
     /* Handles python state machine code generation for a dialog ESD */
     public class DialogESD
     {
+        private ScriptManager scriptManager;
+        private Script areaScript;
+        private NpcContent npcContent;
+
         private List<string> defs = new();
 
-        public DialogESD(int id, List<NpcManager.TalkData> talkData, bool hasBarter)
+        public DialogESD(ScriptManager scriptManager, Script areaScript, uint id, NpcContent npcContent, List<NpcManager.TopicData> topicData)
         {
-            NpcManager.TalkData greeting = GetTalk(talkData, DialogRecord.Type.Greeting);
-            NpcManager.TalkData hurt1 = GetTalks(talkData, DialogRecord.Type.Hit)[0];
-            NpcManager.TalkData hurt2 = GetTalks(talkData, DialogRecord.Type.Hit)[0];
-            NpcManager.TalkData hostile = GetTalks(talkData, DialogRecord.Type.Attack)[0];
-            NpcManager.TalkData death = GetTalks(talkData, DialogRecord.Type.Hit)[0];
-            NpcManager.TalkData kill = GetTalks(talkData, DialogRecord.Type.Attack)[0];
+            this.scriptManager = scriptManager;
+            this.areaScript = areaScript;
+            this.npcContent = npcContent;
 
-            List<NpcManager.TalkData> talks = GetTalks(talkData, DialogRecord.Type.Topic);
+            // Create flags for this character's disposition and first greeting
+            Script.Flag firstGreet = areaScript.CreateFlag(Script.Flag.Category.Saved, Script.Flag.Type.Bit, Script.Flag.Designation.TalkedToPc, npcContent.id);
+            Script.Flag disposition = areaScript.CreateFlag(Script.Flag.Category.Saved, Script.Flag.Type.Byte, Script.Flag.Designation.Disposition, npcContent.id, (uint)npcContent.disposition);
 
-            defs.Add(State_1(315006000));
+            // Split up talk data by type
+            NpcManager.TopicData greeting = GetTalk(topicData, DialogRecord.Type.Greeting)[0];
+            NpcManager.TopicData hit = GetTalk(topicData, DialogRecord.Type.Hit)[0];
+            NpcManager.TopicData attack = GetTalk(topicData, DialogRecord.Type.Attack)[0];
+            List<NpcManager.TopicData> talk = GetTalk(topicData, DialogRecord.Type.Topic);
 
-            defs.Add(State_1000(315006000));
-            defs.Add(State_1001(315006000));
-            defs.Add(State_1101(315006000));
-            defs.Add(State_1102(315006000));
-            defs.Add(State_1103(315006000));
-            defs.Add(State_2000(315006000));
+            defs.Add($"# dialog esd : {npcContent.id}\r\n");
 
-            defs.Add(State_x0(315006000));
-            defs.Add(State_x1(315006000));
-            defs.Add(State_x2(315006000));
-            defs.Add(State_x3(315006000));
-            defs.Add(State_x4(315006000));
-            defs.Add(State_x5(315006000));
-            defs.Add(State_x6(315006000));
-            defs.Add(State_x7(315006000));
-            defs.Add(State_x8(315006000));
-            defs.Add(State_x9(315006000));
+            defs.Add(State_1(id));
 
-            defs.Add(State_x10(315006000));
-            defs.Add(State_x11(315006000));
-            defs.Add(State_x12(315006000));
-            defs.Add(State_x13(315006000));
-            defs.Add(State_x14(315006000));
-            defs.Add(State_x15(315006000));
-            defs.Add(State_x16(315006000));
-            defs.Add(State_x17(315006000));
-            defs.Add(State_x18(315006000));
-            defs.Add(State_x19(315006000));
+            defs.Add(State_1000(id));
+            defs.Add(State_1001(id));
+            defs.Add(State_1101(id));
+            defs.Add(State_1102(id));
+            defs.Add(State_1103(id));
+            defs.Add(State_2000(id));
 
-            defs.Add(State_x20(315006000));
-            defs.Add(State_x21(315006000));
-            defs.Add(State_x22(315006000));
-            defs.Add(State_x23(315006000));
-            defs.Add(State_x24(315006000));
-            defs.Add(State_x25(315006000));
-            defs.Add(State_x26(315006000));
-            defs.Add(State_x27(315006000));
-            defs.Add(State_x28(315006000));
-            defs.Add(State_x29(315006000, greeting.row));
+            defs.Add(State_x0(id));
+            defs.Add(State_x1(id));
+            defs.Add(State_x2(id));
+            defs.Add(State_x3(id));
+            defs.Add(State_x4(id));
+            defs.Add(State_x5(id));
+            defs.Add(State_x6(id));
+            defs.Add(State_x7(id));
+            defs.Add(State_x8(id));
+            defs.Add(State_x9(id));
 
-            defs.Add(State_x30(315006000));
-            defs.Add(State_x31(315006000));
-            defs.Add(State_x32(315006000));
-            defs.Add(State_x33(315006000));
-            defs.Add(State_x34(315006000));
-            defs.Add(State_x35(315006000));
-            defs.Add(State_x36(315006000));
-            defs.Add(State_x37(315006000));
-            defs.Add(State_x38(315006000, kill.row));
-            defs.Add(State_x39(315006000, hurt1.row, hurt1.row));
+            defs.Add(State_x10(id));
+            defs.Add(State_x11(id));
+            defs.Add(State_x12(id));
+            defs.Add(State_x13(id));
+            defs.Add(State_x14(id));
+            defs.Add(State_x15(id));
+            defs.Add(State_x16(id));
+            defs.Add(State_x17(id));
+            defs.Add(State_x18(id));
+            defs.Add(State_x19(id));
 
-            defs.Add(State_x40(315006000, hostile.row));
-            defs.Add(State_x41(315006000, death.row));
-            defs.Add(State_x42(315006000));
-            defs.Add(State_x43(315006000, greeting.row));
-            defs.Add(State_x44(315006000, talks));
+            defs.Add(State_x20(id));
+            defs.Add(State_x21(id));
+            defs.Add(State_x22(id));
+            defs.Add(State_x23(id));
+            defs.Add(State_x24(id));
+            defs.Add(State_x25(id));
+            defs.Add(State_x26(id));
+            defs.Add(State_x27(id));
+            defs.Add(State_x28(id));
+            defs.Add(State_x29(id, greeting));
+
+            defs.Add(State_x30(id));
+            defs.Add(State_x31(id));
+            defs.Add(State_x32(id));
+            defs.Add(State_x33(id));
+            defs.Add(State_x34(id));
+            defs.Add(State_x35(id));
+            defs.Add(State_x36(id));
+            defs.Add(State_x37(id));
+            defs.Add(State_x38(id, hit.talks[0].talkRow));
+            defs.Add(State_x39(id, hit.talks[0].talkRow));
+
+            defs.Add(State_x40(id, attack.talks[0].talkRow));
+            defs.Add(State_x41(id, hit.talks[0].talkRow));
+            defs.Add(State_x42(id));
+            defs.Add(State_x43(id));
+            defs.Add(State_x44(id, npcContent.services, talk));
         }
 
-        private NpcManager.TalkData GetTalk(List<NpcManager.TalkData> talkData, DialogRecord.Type type)
+        /* Returns all topics that match the given type. */
+        private List<NpcManager.TopicData> GetTalk(List<NpcManager.TopicData> topicData, DialogRecord.Type type)
         {
-            foreach(NpcManager.TalkData talk in talkData)
+            List<NpcManager.TopicData> matches = new();
+            foreach(NpcManager.TopicData topic in topicData)
             {
-                if (talk.type == type) { return talk; }
+                if (topic.dialog.type == type) { matches.Add(topic); }
             }
 
-            return null;
-        }
-
-        private List<NpcManager.TalkData> GetTalks(List<NpcManager.TalkData> talkData, DialogRecord.Type type)
-        {
-            List<NpcManager.TalkData> talks = new();
-            foreach (NpcManager.TalkData talk in talkData)
-            {
-                if (talk.type == type) { talks.Add(talk); }
-            }
-
-            return talks;
+            return matches;
         }
 
         public void Write(string pyPath)
@@ -336,11 +345,58 @@ namespace JortPob
             return $"def t{id_s}_x28():\r\n    \"\"\"State 0,1\"\"\"\r\n    call = t{id_s}_x10(machine1=1302, val6=1302)\r\n    if call.Get() == 1:\r\n        \"\"\"State 2\"\"\"\r\n        assert t{id_s}_x4()\r\n    elif call.Done():\r\n        pass\r\n    \"\"\"State 3\"\"\"\r\n    return 0\r\n";
         }
 
-        private string State_x29(uint id, int greetingTalk)
+        private string State_x29(uint id, NpcManager.TopicData greeting)
         {
             string id_s = id.ToString("D9");
-            //int greetingTalk = 80105100;
-            return $"def t{id_s}_x29(text4={greetingTalk}, mode6=1):\r\n    \"\"\"State 0,4\"\"\"\r\n    assert t{id_s}_x2() and CheckSpecificPersonTalkHasEnded(0)\r\n    \"\"\"State 1\"\"\"\r\n    # talk:80105100:\"Ah, back again are we?\"\r\n    # talk:80105101:\"Not everyone can tell how good my wares are. You've a discerning eye, you have.\"\r\n    TalkToPlayer(text4, -1, -1, 0)\r\n    assert CheckSpecificPersonTalkHasEnded(0)\r\n    \"\"\"State 3\"\"\"\r\n    if mode6 == 0:\r\n        pass\r\n    else:\r\n        \"\"\"State 2\"\"\"\r\n        ReportConversationEndToHavokBehavior()\r\n    \"\"\"State 5\"\"\"\r\n    return 0\r\n";
+            string s = $"def t{id_s}_x29(mode6=1):\r\n    \"\"\"State 0,4\"\"\"\r\n    assert t{id_s}_x2() and CheckSpecificPersonTalkHasEnded(0)\r\n    ShuffleRNGSeed(100)\r\n    SetRNGSeed()\r\n";
+
+            // Build an if-else tree for each possible greeting and its conditions
+            if (greeting.talks.Count > 1)
+            {
+                string ifop = "if";
+                for (int i = 0; i < greeting.talks.Count(); i++)
+                {
+                    NpcManager.TopicData.TalkData talkData = greeting.talks[i];
+
+                    string filters = $" {talkData.dialogInfo.GenerateCondition(scriptManager, npcContent)}";
+                    string greetLine = "";
+                    if (filters == " " || !(i < greeting.talks.Count() - 1)) { ifop = "else"; filters = ""; }
+
+                    greetLine += $"    {ifop}{filters}:\r\n";
+                    greetLine += $"        # talk: \"{Common.Utility.SanitizeTextForComment(talkData.dialogInfo.text)}\"\r\n";
+                    greetLine += $"        TalkToPlayer({talkData.talkRow}, -1, -1, 0)\r\n        assert CheckSpecificPersonTalkHasEnded(0)\r\n";
+
+                    foreach (DialogRecord dialog in talkData.dialogInfo.unlocks)
+                    {
+                        greetLine += $"        SetEventFlag({dialog.flag.id}, FlagState.On)\r\n";
+                    }
+
+                    if(talkData.dialogInfo.script != null)
+                    {
+                        greetLine += talkData.dialogInfo.script.GenerateEsdSnippet(scriptManager, npcContent, 8);
+                    }
+
+                    s += greetLine;
+
+                    if (ifop == "if") { ifop = "elif"; }
+                    if (ifop == "else") { break; }
+                }
+            }
+            // Or if there is just a single possible greeting just stick there and call it done
+            else
+            {
+                string greetLine = $"    TalkToPlayer({greeting.talks[0].talkRow}, -1, -1, 0)\r\n    assert CheckSpecificPersonTalkHasEnded(0)\r\n";
+                foreach (DialogRecord dialog in greeting.talks[0].dialogInfo.unlocks)
+                {
+                    greetLine += $"    SetEventFlag({dialog.flag.id}, FlagState.On)\r\n";
+                }
+                s += greetLine;
+            }
+            s += "    \"\"\"State 3\"\"\"\r\n    if mode6 == 0:\r\n        pass\r\n    else:\r\n        \"\"\"State 2\"\"\"\r\n        ReportConversationEndToHavokBehavior()\r\n    \"\"\"State 5\"\"\"\r\n";
+            // Also make sure to flag the TalkedToPC flag as it should be marked true once the player has finished the greeting with an npc for the first time
+            s += $"    SetEventFlag({scriptManager.GetFlag(Script.Flag.Designation.TalkedToPc, npcContent.id).id}, FlagState.On)\r\n";
+            s += "    return 0\r\n";
+            return s;
         }
 
         private string State_x30(uint id)
@@ -400,12 +456,12 @@ namespace JortPob
             return $"def t{id_s}_x38():\r\n    \"\"\"State 0,1\"\"\"\r\n    # talk:80181200:\"Stay away, Us wanderers have had enough.\"\r\n    assert t{id_s}_x30(text3={killTalk}, mode5=1)\r\n    \"\"\"State 2\"\"\"\r\n    return 0\r\n";
         }
 
-        private string State_x39(uint id, int hurt1Talk, int hurt2Talk)
+        private string State_x39(uint id, int hurt1Talk)
         {
             string id_s = id.ToString("D9");
             //int hurt1Talk = 80181000;
             //int hurt2Talk = 80181010;
-            return $"def t{id_s}_x39(flag5=1043332705):\r\n    \"\"\"State 0,3\"\"\"\r\n    if not GetEventFlag(flag5):\r\n        \"\"\"State 1,4\"\"\"\r\n        # talk:80181000:\"Owgh!\"\r\n        assert t{id_s}_x34(text1={hurt1Talk}, flag3=flag5, mode3=1)\r\n    else:\r\n        \"\"\"State 2,5\"\"\"\r\n        # talk:80181010:\"What are you playing at! Stop this!\"\r\n        assert t{id_s}_x34(text1={hurt2Talk}, flag3=flag5, mode3=1)\r\n    \"\"\"State 6\"\"\"\r\n    return 0\r\n";
+            return $"def t{id_s}_x39(flag5=1043332705):\r\n    \"\"\"State 0,3\"\"\"\r\n    if not GetEventFlag(flag5):\r\n        \"\"\"State 1,4\"\"\"\r\n        # talk:80181000:\"Owgh!\"\r\n        assert t{id_s}_x34(text1={hurt1Talk}, flag3=flag5, mode3=1)\r\n    else:\r\n        \"\"\"State 2,5\"\"\"\r\n        # talk:80181010:\"What are you playing at! Stop this!\"\r\n        assert t{id_s}_x34(text1={hurt1Talk}, flag3=flag5, mode3=1)\r\n    \"\"\"State 6\"\"\"\r\n    return 0\r\n";
         }
 
         private string State_x40(uint id, int hostileTalk)
@@ -430,32 +486,83 @@ namespace JortPob
             return $"def t{id_s}_x42(flag2={unk0Flag}, flag3={unk1Flag}):\r\n    \"\"\"State 0\"\"\"\r\n    while True:\r\n        \"\"\"State 1\"\"\"\r\n        # actionbutton:6000:\"Talk\"\r\n        call = t{id_s}_x0(actionbutton1=6000, flag10=6001, flag14=6000, flag15=6000, flag16=6000, flag17=6000,\r\n                             flag9=6000)\r\n        if call.Done():\r\n            break\r\n        elif GetEventFlag(flag2) and not GetEventFlag(flag3):\r\n            \"\"\"State 2\"\"\"\r\n            # talk:80181010:\"What are you playing at! Stop this!\"\r\n            assert t{id_s}_x34(text1=80181010, flag3=flag3, mode3=1)\r\n    \"\"\"State 3\"\"\"\r\n    return 0\r\n";
         }
 
-        private string State_x43(uint id, int greetingTalk)
+        private string State_x43(uint id)
         {
             string id_s = id.ToString("D9");
-            //int greetingTalk = 80105100;
-            return $"def t{id_s}_x43():\r\n    \"\"\"State 0,1\"\"\"\r\n    # talk:80105100:\"Ah, back again are we?\"\r\n    # talk:80105101:\"Not everyone can tell how good my wares are. You've a discerning eye, you have.\"\r\n    assert t{id_s}_x29(text4={greetingTalk}, mode6=1)\r\n    \"\"\"State 4\"\"\"\r\n    return 0\r\n";
+            string s = $"def t{id_s}_x43():\r\n    \"\"\"State 0,1\"\"\"\r\n    # talk:80105100:\"Ah, back again are we?\"\r\n    # talk:80105101:\"Not everyone can tell how good my wares are. You've a discerning eye, you have.\"\r\n    assert t{id_s}_x29(mode6=1)\r\n    \"\"\"State 4\"\"\"\r\n    return 0\r\n";
+            return s;
         }
 
-        private string State_x44(uint id, List<NpcManager.TalkData> talks)
+        private string State_x44(uint id, bool hasShop, List<NpcManager.TopicData> topics)
         {
             string id_s = id.ToString("D9");
             int shop1 = 100625;
             int shop2 = 100649;
-            string s = $"def t{id_s}_x44(shop1={shop1}, shop2={shop2}):\r\n    \"\"\"State 0\"\"\"\r\n    while True:\r\n        \"\"\"State 1\"\"\"\r\n        ClearPreviousMenuSelection()\r\n        ClearTalkActionState()\r\n        ClearTalkListData()\r\n        \"\"\"State 2\"\"\"\r\n        # action:20000010:\"Purchase\"\r\n        AddTalkListData(1, 20000010, -1)\r\n        # action:20000011:\"Sell\"\r\n        AddTalkListData(2, 20000011, -1)\r\n";
+            string s = $"def t{id_s}_x44(shop1={shop1}, shop2={shop2}):\r\n    \"\"\"State 0\"\"\"\r\n    while True:\r\n        \"\"\"State 1\"\"\"\r\n        ClearPreviousMenuSelection()\r\n        ClearTalkActionState()\r\n        ClearTalkListData()\r\n        \"\"\"State 2\"\"\"\r\n";
 
-            for (int i = 0; i < talks.Count(); i++)
+            int listCount = 1; // starts at 1 idk
+            if(hasShop)
             {
-                NpcManager.TalkData talk = talks[i];
-                s += $"        # action:{talk.topic}:\"Topic\"\r\n        AddTalkListData({i+3}, {talk.topic}, -1)\r\n";
+                s += $"        # action:20000010:\"Purchase\"\r\n        AddTalkListData({listCount++}, 20000010, -1)\r\n        # action:20000011:\"Sell\"\r\n        AddTalkListData({listCount++}, 20000011, -1)\r\n";
             }
 
-            s += $"        # action:20000009:\"Leave\"\r\n        AddTalkListData(99, 20000009, -1)\r\n        \"\"\"State 3\"\"\"\r\n        ShowShopMessage(TalkOptionsType.Regular)\r\n        \"\"\"State 4\"\"\"\r\n        assert not (CheckSpecificPersonMenuIsOpen(1, 0) and not CheckSpecificPersonGenericDialogIsOpen(0))\r\n        \"\"\"State 5\"\"\"\r\n        if GetTalkListEntryResult() == 1:\r\n            \"\"\"State 6\"\"\"\r\n            OpenRegularShop(shop1, shop2)\r\n            \"\"\"State 7\"\"\"\r\n            assert not (CheckSpecificPersonMenuIsOpen(5, 0) and not CheckSpecificPersonGenericDialogIsOpen(0))\r\n        elif GetTalkListEntryResult() == 2:\r\n            \"\"\"State 9\"\"\"\r\n            OpenSellShop(-1, -1)\r\n            \"\"\"State 8\"\"\"\r\n            assert not (CheckSpecificPersonMenuIsOpen(6, 0) and not CheckSpecificPersonGenericDialogIsOpen(0))\r\n";
-
-            for (int i=0;i<talks.Count();i++)
+            for (int i = 0; i < topics.Count(); i++)
             {
-                NpcManager.TalkData talk = talks[i];
-                s += $"        elif GetTalkListEntryResult() == {i+3}:\r\n            assert t{id_s}_x33(text2={talk.row}, mode4=1)\r\n";
+                NpcManager.TopicData topic = topics[i];
+                List<string> filters = new();
+                foreach(NpcManager.TopicData.TalkData talk in topic.talks)
+                {
+                    string filter = talk.dialogInfo.GenerateCondition(scriptManager, npcContent);
+                    if(filter == "") { filters.Clear(); break; }
+                    filters.Add(filter);
+                }
+                string combinedFilters = "";
+                for(int j = 0;j<filters.Count();j++)
+                {
+                    string filter = filters[j];
+                    combinedFilters += $"({filter})";
+                    if(j<filters.Count()-1) { combinedFilters += " or "; }
+                }
+                if(combinedFilters != "") { combinedFilters = $" and ({combinedFilters})"; }
+
+                s += $"        # action:{topic.topicText}:\"{topic.dialog.id}\"\r\n        if GetEventFlag({topic.dialog.flag.id}){combinedFilters}:\r\n            AddTalkListData({i+listCount}, {topic.topicText}, -1)\r\n        else:\r\n            pass\r\n";
+            }
+
+            s += $"        # action:20000009:\"Leave\"\r\n        AddTalkListData(99, 20000009, -1)\r\n        \"\"\"State 3\"\"\"\r\n        ShowShopMessage(TalkOptionsType.Regular)\r\n        \"\"\"State 4\"\"\"\r\n        assert not (CheckSpecificPersonMenuIsOpen(1, 0) and not CheckSpecificPersonGenericDialogIsOpen(0))\r\n        \"\"\"State 5\"\"\"\r\n";
+
+            listCount = 1; // reset
+            if (hasShop)
+            {
+                s += $"        if GetTalkListEntryResult() == {listCount++}:\r\n            \"\"\"State 6\"\"\"\r\n            OpenRegularShop(shop1, shop2)\r\n            \"\"\"State 7\"\"\"\r\n            assert not (CheckSpecificPersonMenuIsOpen(5, 0) and not CheckSpecificPersonGenericDialogIsOpen(0))\r\n        elif GetTalkListEntryResult() == {listCount++}:\r\n            \"\"\"State 9\"\"\"\r\n            OpenSellShop(-1, -1)\r\n            \"\"\"State 8\"\"\"\r\n            assert not (CheckSpecificPersonMenuIsOpen(6, 0) and not CheckSpecificPersonGenericDialogIsOpen(0))\r\n";
+            }
+
+            string ifop = hasShop?"elif":"if";
+            for (int i = 0; i<topics.Count();i++)
+            {
+                NpcManager.TopicData topic = topics[i];
+
+                foreach (NpcManager.TopicData.TalkData talk in topic.talks)
+                {
+                    string filters = talk.dialogInfo.GenerateCondition(scriptManager, npcContent);
+                    if(filters != "") { filters = $" and {filters}"; }
+
+                    s += $"        {ifop} GetTalkListEntryResult() == {i + listCount}{filters}:\r\n";
+                    s += $"            # talk: \"{Common.Utility.SanitizeTextForComment(talk.dialogInfo.text)}\"\r\n";
+                    s += $"            assert t{id_s}_x33(text2={talk.talkRow}, mode4=1)\r\n";
+
+                    foreach (DialogRecord dialog in talk.dialogInfo.unlocks)
+                    {
+                        s += $"            SetEventFlag({dialog.flag.id}, FlagState.On)\r\n";
+                    }
+
+                    if (talk.dialogInfo.script != null)
+                    {
+                        s += talk.dialogInfo.script.GenerateEsdSnippet(scriptManager, npcContent, 12);
+                    }
+
+
+                    if (ifop == "if") { ifop = "elif"; }
+                }
             }
 
             s += "        else:\r\n            \"\"\"State 10,11\"\"\"\r\n            return 0\r\n";

@@ -112,19 +112,26 @@ namespace JortPob
             /* Clear out most of the talk params to make room for our custom ones */
             /* Just keeping some important ones for opening cutscene */
             FsParam talkParam = param[ParamType.TalkParam];
-            for(int i=0;i<talkParam.Rows.ToList().Count();i++)
+            List<FsParam.Row> openingcustcenestuff = new();
+            foreach (FsParam.Row row in talkParam.Rows)
             {
-                FsParam.Row row = talkParam.Rows.ToList()[i];
-                if (row.ID <= 1500080) { continue; } //keep opening custcene stuff
-                talkParam.RemoveRow(row);
-                i--;
+                if (row.ID > 1500080)
+                    break;
+                openingcustcenestuff.Add(row);
             }
+            talkParam.ClearRows();
+            foreach (FsParam.Row row in openingcustcenestuff) {
+                talkParam.AddRow(row);
+            }
+
+            GC.Collect(); // maybe fixes a bug with fsparam. 80% sure
         }
 
         public void AddRow(FsParam param, FsParam.Row row)
         {
-            if (param[row.ID] != null)
-                param.RemoveRow(param[row.ID]!);
+            FsParam.Row oldrow = param[row.ID];
+            if (oldrow != null)
+                param.RemoveRow(oldrow);
             param.AddRow(row);
         }
 
@@ -148,7 +155,11 @@ namespace JortPob
             foreach (KeyValuePair<ParamType, FsParam> kvp in param)
             {
                 FsParam param = kvp.Value;
-                // Utility.SortPARAM(param);  // sort rows before writing since our newly added rows are just appended // NEVERMIND ITS SO FUCKING SLOW LMAOOOO @TODO: JESUS!
+              
+                if (Const.DEBUG_ENABLE_FMG_PARAM_SORTING)
+                {
+                    Utility.SortFsParam(param);  // sort rows, debug flag to turn this off for speed. fmg sorting isn't required but in order to mimick FS standards it should be done in prod
+                }
 
                 BinderFile file = new();
                 file.Bytes = param.Write();
@@ -178,30 +189,34 @@ namespace JortPob
         public void GenerateAssetRows(List<ModelInfo> assets)
         {
             FsParam assetParam = param[ParamType.AssetEnvironmentGeometryParam];
+            FsParam.Row electedStoneBuildingRow = assetParam[7077];
+            FsParam.Column drawParamID = assetParam["refDrawParamId"];
+            FsParam.Column hitType = assetParam["hitCreateType"];
+            FsParam.Column behaviourType = assetParam["behaviorType"];
             foreach (ModelInfo asset in assets)
             {
                 /* Dynamic */
                 if (asset.IsDynamic())
                 {
                     // Clone a specific row as our baseline
-                    FsParam.Row row = CloneRow(assetParam[7077], asset.name, asset.AssetRow());   // 7077 is a big stone building part in the overworld
+                    FsParam.Row row = CloneRow(electedStoneBuildingRow, asset.name, asset.AssetRow());   // 7077 is a big stone building part in the overworld
 
                     // Set some values and add
-                    row.Cells[2].SetValue(AssetPartDrawParamBySize(asset));        // DrawParamID
-                    row.Cells[3].SetValue((sbyte)0);           // Hit type (LO ONLY)
-                    row.Cells[4].SetValue((byte)0);           // BehaviourType, affects HKX scaling and breakability
+                    drawParamID.SetValue(row, AssetPartDrawParamBySize(asset));        // DrawParamID
+                    hitType.SetValue(row, (sbyte)0);           // Hit type (LO ONLY)
+                    behaviourType.SetValue(row, (byte)0);           // BehaviourType, affects HKX scaling and breakability
                     AddRow(assetParam, row);
                 }
                 /* Static */
                 else
                 {
                     // Clone a specific row as our baseline
-                    FsParam.Row row = CloneRow(assetParam[7077], asset.name, asset.AssetRow());   // 7077 is a big stone building part in the overworld
+                    FsParam.Row row = CloneRow(electedStoneBuildingRow, asset.name, asset.AssetRow());   // 7077 is a big stone building part in the overworld
 
                     // Set some values and add
-                    row.Cells[2].SetValue(AssetPartDrawParamBySize(asset));        // DrawParamID
-                    row.Cells[3].SetValue((sbyte)0);           // Hit type (LO ONLY)
-                    row.Cells[4].SetValue((byte)1);           // BehaviourType, affects HKX scaling and breakability
+                    drawParamID.SetValue(row, AssetPartDrawParamBySize(asset));        // DrawParamID
+                    hitType.SetValue(row, (sbyte)0);           // Hit type (LO ONLY)
+                    behaviourType.SetValue(row, (byte)1);           // BehaviourType, affects HKX scaling and breakability
                     AddRow(assetParam, row);
                 }
             }
@@ -210,18 +225,27 @@ namespace JortPob
         public void GenerateAssetRows(List<EmitterInfo> assets)
         {
             FsParam assetParam = param[ParamType.AssetEnvironmentGeometryParam];
+            FsParam.Row blessedStoneBuildingRow = assetParam[7077];
+            FsParam.Column drawParamID = assetParam["refDrawParamId"];
+            FsParam.Column hitType = assetParam["hitCreateType"];
+            FsParam.Column behaviourType = assetParam["behaviorType"];
+            
+            FsParam emitterParam = param[ParamType.AssetModelSfxParam];
+            FsParam.Row blessedCandleRow = emitterParam[228039000];
+            List<FsParam.Column> emitterParamCols = [.. emitterParam.Columns];
+
             foreach (EmitterInfo asset in assets)
             {
                 /* We just make all emitters dynamic assets because I can't be asked to sort out baked scaling for them rn */
                 /* There aren't that many of them and most will be no-collide so its fine prolly */
                 // Clone a specific row as our baseline
                 {
-                    FsParam.Row row = CloneRow(assetParam[7077], asset.record, asset.AssetRow());   // 7077 is a big stone building part in the overworld
+                    FsParam.Row row = CloneRow(blessedStoneBuildingRow, asset.record, asset.AssetRow());   // 7077 is a big stone building part in the overworld
 
                     // Set some values and add
-                    row.Cells[2].SetValue(AssetPartDrawParamBySize(asset.model));        // DrawParamID
-                    row.Cells[3].SetValue((sbyte)0);           // Hit type (LO ONLY)
-                    row.Cells[4].SetValue((byte)0);           // BehaviourType, affects HKX scaling and breakability
+                    drawParamID.SetValue(row, AssetPartDrawParamBySize(asset.model));        // DrawParamID
+                    hitType.SetValue(row, (sbyte)0);           // Hit type (LO ONLY)
+                    behaviourType.SetValue(row, (byte)0);           // BehaviourType, affects HKX scaling and breakability
                     AddRow(assetParam, row);
                 }
 
@@ -230,10 +254,9 @@ namespace JortPob
                     if (!asset.HasEmitter() && !asset.HasLight()) { continue; }  // really shouldnt happen but...
 
                     int offset = 0;
-                    FsParam emitterParam = param[ParamType.AssetModelSfxParam];
-                    FsParam.Row row = CloneRow(emitterParam[228039000], asset.record, asset.AssetRow() * 1000); // 228039000 is a candle in the round table hold
-                    row.Cells[0 + (offset * 3)].SetValue(-1);
-                    row.Cells[1 + (offset * 3)].SetValue(-1);
+                    FsParam.Row row = CloneRow(blessedCandleRow, asset.record, asset.AssetRow() * 1000); // 228039000 is a candle in the round table hold
+                    emitterParamCols[0 + (offset * 3)].SetValue(row, -1); //sfxId_X
+                    emitterParamCols[1 + (offset * 3)].SetValue(row, -1); //dmypolyId_X
 
                     /* Quick optimization */
                     /* In Morrowind they comibne multiple effects for some emitter things. Most notably a campfire is like 5 emitters */
@@ -257,16 +280,16 @@ namespace JortPob
 
                         if (fxrid != -1)
                         {
-                            row.Cells[0 + (offset * 3)].SetValue(fxrid);
-                            row.Cells[1 + (offset * 3)].SetValue((int)refid);
+                            emitterParamCols[0 + (offset * 3)].SetValue(row, fxrid); //sfxId_X
+                            emitterParamCols[1 + (offset * 3)].SetValue(row, (int)refid); //dmypolyId_X
                             offset++;
                         }
                     }
 
                     if (asset.HasLight())
                     {
-                        row.Cells[0 + (offset * 3)].SetValue(FxrManager.GetLightFXR(asset));
-                        row.Cells[1 + (offset * 3)].SetValue((int)asset.GetAttachLight());
+                        emitterParamCols[0 + (offset * 3)].SetValue(row, FxrManager.GetLightFXR(asset)); //sfxId_X
+                        emitterParamCols[1 + (offset * 3)].SetValue(row, (int)asset.GetAttachLight()); //dmypolyId_X
                     }
 
                     AddRow(emitterParam, row);
@@ -277,10 +300,11 @@ namespace JortPob
         public void GenerateAssetRows(List<LiquidInfo> assets)
         {
             FsParam assetParam = param[ParamType.AssetEnvironmentGeometryParam];
+            FsParam.Row oceanwaterrow = assetParam[97000];
             foreach (LiquidInfo asset in assets)
             {
                 // Clone a specific row as our baseline
-                FsParam.Row row = CloneRow(assetParam[97000], $"water{asset.id}", asset.AssetRow()); // 097000 is the ocean water around limgrave
+                FsParam.Row row = CloneRow(oceanwaterrow, $"water{asset.id}", asset.AssetRow()); // 097000 is the ocean water around limgrave
                 AddRow(assetParam, row);
             }
         }
@@ -293,27 +317,43 @@ namespace JortPob
             short drawParamId = Const.PART_DRAW_PARAM;
             lodPartDrawParamIDs = new();
 
+            FsParam.Row genericlongdistanceloddrawparam = drawParam[1001];
+
+            FsParam.Column lv01_BorderDist = drawParam["lv01_BorderDist"];
+            FsParam.Column lv01_PlayDist = drawParam["lv01_PlayDist"];
+
+            FsParam.Column drawDist = drawParam["drawDist"];
+            FsParam.Column drawFadeRange = drawParam["drawFadeRange"];
+
+            FsParam.Column tex_lv01_BorderDist = drawParam["tex_lv01_BorderDist"];
+            FsParam.Column tex_lv01_PlayDist = drawParam["tex_lv01_PlayDist"];
+            FsParam.Column IncludeLodMapLv = drawParam["IncludeLodMapLv"];
+            FsParam.Column lodType = drawParam["lodType"];
+
+            FsParam.Column DistantViewModel_BorderDist = drawParam["DistantViewModel_BorderDist"];
+            FsParam.Column DistantViewModel_PlayDist = drawParam["DistantViewModel_PlayDist"];
+
             // Clone a specific row as our baseline
             for (int i = 0; i < Const.ASSET_LOD_VALUES.Count(); i++)
             {
                 float[] values = Const.ASSET_LOD_VALUES[i];
 
-                FsParam.Row row = CloneRow(drawParam[1001], $"mw | generic | 0lod | size_{values[0]} | static", drawParamId); // generic long distance lod drawparam
+                FsParam.Row row = CloneRow(genericlongdistanceloddrawparam, $"mw | generic | 0lod | size_{values[0]} | static", drawParamId); // generic long distance lod drawparam
 
                 // set some values
-                row.Cells[0].SetValue(NONE);  // border 0
-                row.Cells[1].SetValue(0f);
+                lv01_BorderDist.SetValue(row, NONE);  // border 0
+                lv01_PlayDist.SetValue(row, 0f);
 
-                row.Cells[13].SetValue(values[1]); // drawdist
-                row.Cells[14].SetValue(values[2]); // fadeoff
+                drawDist.SetValue(row, values[1]); // drawdist
+                drawFadeRange.SetValue(row, values[2]); // fadeoff
 
-                row.Cells[10].SetValue(256f); // tex_lv1_borderdist [512]
-                row.Cells[11].SetValue(32f);    // tex_lv1_playdist [10]
-                row.Cells[24].SetValue((sbyte)0);    // include lod map level [2]
-                row.Cells[26].SetValue((byte)1);    // lodtype [1]
+                tex_lv01_BorderDist.SetValue(row, 256f); // tex_lv1_borderdist [512]
+                tex_lv01_PlayDist.SetValue(row, 32f);    // tex_lv1_playdist [10]
+                IncludeLodMapLv.SetValue(row, (sbyte)0);    // include lod map level [2]
+                lodType.SetValue(row, (byte)1);    // lodtype [1]
 
-                row.Cells[30].SetValue(NONE); // distant view model border dist [30]
-                row.Cells[31].SetValue(0f);    // distant view model play dist [5]
+                DistantViewModel_BorderDist.SetValue(row, NONE); // distant view model border dist [30]
+                DistantViewModel_PlayDist.SetValue(row, 0f);    // distant view model play dist [5]
                 lodPartDrawParamIDs.Add(i, drawParamId++);
                 AddRow(drawParam, row);
             }
@@ -384,6 +424,9 @@ namespace JortPob
 
         public void GenerateMapInfoParam(Layout layout)
         {
+            FsParam mapInfoParam = param[ParamType.MapDefaultInfoParam];
+            FsParam mapRegionParam = param[ParamType.MapGdRegionInfoParam];
+
             // Exterior msbs
             foreach (Tile tile in layout.tiles)
             {
@@ -402,12 +445,10 @@ namespace JortPob
                 int id = int.Parse($"60{tile.coordinate.x.ToString("D2")}{tile.coordinate.y.ToString("D2")}00");
 
                 /* MapInfoParam */ // controls sky and weather
-                FsParam mapInfoParam = param[ParamType.MapDefaultInfoParam];
                 FsParam.Row rowA = CloneRow(mapInfoParam[weatherData.MapInfoParamId], $"mw ext m{tile.map} {tile.coordinate.x} {tile.coordinate.y} {tile.block}", id);
                 AddRow(mapInfoParam, rowA);
 
                 /* MapRegionParam */ // controls gparam
-                FsParam mapRegionParam = param[ParamType.MapGdRegionInfoParam];
                 FsParam.Row rowB = CloneRow(mapRegionParam[weatherData.MapRegionParamId], $"mw ext m{tile.map} {tile.coordinate.x} {tile.coordinate.y} {tile.block}", id);
                 AddRow(mapRegionParam, rowB);
             }
@@ -422,38 +463,46 @@ namespace JortPob
                 int id = int.Parse($"{group.map:D2}{group.area:D2}{group.unk:D2}{group.block:D2}");
 
                 /* MapInfoParam */ // controls sky and weather
-                FsParam mapInfoParam = param[ParamType.MapDefaultInfoParam];
                 FsParam.Row rowA = CloneRow(mapInfoParam[weatherData.MapInfoParamId], $"mw int m{group.map} {group.area} {group.unk} {group.block}", id);
                 AddRow(mapInfoParam, rowA);
 
                 /* MapRegionParam */ // controls gparam
-                FsParam mapRegionParam = param[ParamType.MapGdRegionInfoParam];
                 FsParam.Row rowB = CloneRow(mapRegionParam[weatherData.MapRegionParamId], $"mw int m{group.map} {group.area} {group.unk} {group.block}", id);
                 AddRow(mapRegionParam, rowB);
             }
         }
 
-        public void GenerateTalkParam(TextManager textManager, List<NpcManager.TalkData> talkData)
+        public void GenerateTalkParam(TextManager textManager, List<NpcManager.TopicData> topicData)
         {
-            foreach (NpcManager.TalkData talk in talkData)
+            FsParam talkParam = param[ParamType.TalkParam];
+            FsParam.Row templateTalkRow = talkParam[1400000]; // 1400000 is a line from opening cutscene
+
+            FsParam.Column msgId = talkParam["msgId"];
+            FsParam.Column voiceId = talkParam["voiceId"];
+
+            FsParam.Column msgId_female = talkParam["msgId_female"];
+            FsParam.Column voiceId_female = talkParam["voiceId_female"];
+
+            foreach (NpcManager.TopicData topic in topicData)
             {
-                int id = talk.row;
+                foreach (NpcManager.TopicData.TalkData talk in topic.talks)
+                {
+                    int id = talk.talkRow;
 
-                FsParam talkParam = param[ParamType.TalkParam];
+                    // If exists skip, duplicates happen during gen of these params beacuse a single talkparam can be used by any number of npcs. Hundreds in some cases.
+                    if (talkParam[id] != null) { continue; }
 
-                // If exists skip, duplicates happen during gen of these params beacuse a single talkparam can be used by any number of npcs. Hundreds in some cases.
-                if (talkParam[id] != null) { continue; }
+                    FsParam.Row row = CloneRow(templateTalkRow, talk.dialogInfo.text, id); // 1400000 is a line from opening cutscene
 
-                FsParam.Row row = CloneRow(talkParam[1400000], talk.text, id); // 1400000 is a line from opening cutscene
+                    msgId.SetValue(row, id * 10); // message id (male)
+                    voiceId.SetValue(row, id * 10); // message id (male)
 
-                row.Cells[3].SetValue(id * 10); // message id (male)
-                row.Cells[4].SetValue(id * 10); // message id (male)
+                    msgId_female.SetValue(row, id * 10); // message id (female)
+                    voiceId_female.SetValue(row, id * 10); // message id (female)
 
-                row.Cells[12].SetValue(id * 10); // message id (female)
-                row.Cells[13].SetValue(id * 10); // message id (female)
-
-                textManager.AddTalk(id * 10, talk.text);
-                AddRow(talkParam, row);
+                    textManager.AddTalk(id * 10, talk.dialogInfo.text);
+                    AddRow(talkParam, row);
+                }
             }
         }
 
@@ -489,9 +538,11 @@ namespace JortPob
         {
             int textId = textManager.AddLocation("Morrowind");
 
+            FsParam.Column mapNameId = param[ParamType.MapNameTexParam]["mapNameId"];
+
             foreach(FsParam.Row row in param[ParamType.MapNameTexParam].Rows)
             {
-               row.Cells[7].SetValue(textId);
+               mapNameId.SetValue(row, textId);
             }
 
             textManager.SetLocation(10010, "Morrowind");  // it seems like chapel of anticiaption is the default when the game doesnt know where you are so making that a generic as well
@@ -549,14 +600,14 @@ namespace JortPob
             return id;
         }
 
-        /* Die */
+        /* Die */ // @TODO: maybe move all row removal into the constructor since it can just *happen*
         public void KillMapHeightParams()
         {
             /* Delete most of these */
             FsParam mapGridHeightParam = param[ParamType.MapGridCreateHeightLimitInfoParam];
-            for (int i = 0; i < mapGridHeightParam.Rows.ToList().Count(); i++)
+            for (int i = 0; i < mapGridHeightParam.Rows.Count(); i++)
             {
-                FsParam.Row row = mapGridHeightParam.Rows.ToList()[i];
+                FsParam.Row row = mapGridHeightParam.Rows[i];
                 if (row.ID >= 99999901) { continue; } // keep some base params
                 mapGridHeightParam.RemoveRow(row);
                 i--;
@@ -564,9 +615,9 @@ namespace JortPob
 
             /* Delete most of these */
             FsParam mapGridHeightDetailParam = param[ParamType.MapGridCreateHeightDetailLimitInfo];
-            for (int i = 0; i < mapGridHeightDetailParam.Rows.ToList().Count(); i++)
+            for (int i = 0; i < mapGridHeightDetailParam.Rows.Count(); i++)
             {
-                FsParam.Row row = mapGridHeightDetailParam.Rows.ToList()[i];
+                FsParam.Row row = mapGridHeightDetailParam.Rows[i];
                 if (row.ID <= 2) { continue; } // keep some base params
                 mapGridHeightDetailParam.RemoveRow(row);
                 i--;

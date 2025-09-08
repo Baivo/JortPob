@@ -127,11 +127,6 @@ namespace JortPob
             flee = int.Parse(record.json["ai_data"]["flee"].ToString());
             alarm = int.Parse(record.json["ai_data"]["alarm"].ToString());
 
-            if(name == "Dead Warlock")
-            {
-                Console.Write("HI");
-            }
-
             hostile = fight >= 80; // @TODO: recalc with disposition mods based off UESP calc
             dead = record.json["data"]["stats"] != null && record.json["data"]["stats"]["health"] != null ? (int.Parse(record.json["data"]["stats"]["health"].ToString()) <= 0) : false;
 

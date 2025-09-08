@@ -114,7 +114,10 @@ namespace JortPob
                 foreach (KeyValuePair<TextType, FMG> kvp in fmgs)
                 {
                     FMG fmg = kvp.Value;
-                    // Utility.SortFMG(fmg);  // it's too slow!!!!!! jesus fucking christ make a faster sort @TODO: !!
+                    if (Const.DEBUG_ENABLE_FMG_PARAM_SORTING)
+                    {
+                        Utility.SortFMG(fmg);  // it's too slow!!!!!! jesus fucking christ make a faster sort @TODO: !!
+                    }
 
                     BinderFile file = new();
                     file.Name = $"N:\\GR\\data\\INTERROOT_win64\\msg\\engUS\\{kvp.Key.ToString()}.fmg";
